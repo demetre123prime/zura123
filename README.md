@@ -1,32 +1,48 @@
-# Zura123 Dashboard
+# Zura Dashboard
 
-A small Flask dashboard with a server-side password check, login session, and logout button. The dashboard is intentionally empty so you can add your own content later.
+A small, password-protected dashboard for keeping a **manual inventory of your own devices** and recording check-ins and notes.
 
-## Important
+## What it does
 
-This repository is currently public. Do not commit passwords, secret keys, API keys, or private data. The password is read from an environment variable and is not stored in this repository. For a real public deployment, use a strong unique password and HTTPS. Do not use the temporary demo password on an internet-facing site.
+- Password-protected login and logout.
+- Add and remove device entries manually.
+- Record a manual check-in for a device.
+- Add notes to the activity feed.
+- Store records in SQLite.
+- CSRF protection on forms and basic browser security headers.
 
-GitHub Pages cannot run this Flask backend. Deploy this app to a Python hosting service that supports Flask.
+This project does **not** install agents, monitor devices, collect browser data, read files, capture keystrokes, or collect passwords/tokens. A device is listed only when you add it yourself.
 
-## Run locally on Windows
+## Run locally on Windows (PowerShell)
 
-Open PowerShell in the project folder:
+Python 3.10+ is recommended.
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:DASHBOARD_PASSWORD = "sudo123"
+$env:DASHBOARD_PASSWORD = "choose-a-long-unique-password"
 $env:FLASK_SECRET_KEY = (py -c "import secrets; print(secrets.token_hex(32))")
+$env:COOKIE_SECURE = "0"
 py app.py
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
+Open http://127.0.0.1:5000.
 
-The value `sudo123` is only a temporary local demo password. Change it to a long, unique password before deploying publicly. Keep `FLASK_SECRET_KEY` private and set both environment variables in your hosting provider's secret/environment settings.
+## Deploy
 
-## Routes
+This is a Flask application, not a GitHub Pages site. Deploy it to a Python host that supports a persistent disk for SQLite, set these environment variables in the host dashboard, and use HTTPS:
 
-- `/` — login page
-- `/dashboard` — protected empty dashboard
-- `/logout` — end the login session
+- `DASHBOARD_PASSWORD`: a unique password of at least 12 characters.
+- `FLASK_SECRET_KEY`: a random secret of at least 32 characters.
+- `COOKIE_SECURE`: leave as `1` when using HTTPS.
+- `DATABASE_PATH`: optional path on the host's persistent disk, e.g. `/var/data/dashboard.db`.
+
+The included `render.yaml` is a deployment blueprint. Review the host's current pricing and persistent-disk availability before deploying.
+
+## Security notes
+
+- Never commit real passwords, API keys, or secret keys.
+- The repository is public, so keep all secrets in environment variables.
+- Use a strong unique dashboard password; do not reuse your GitHub password.
+- Back up the SQLite database if you need to preserve your records.
