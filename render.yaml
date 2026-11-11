@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: zura-dashboard
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "1"
