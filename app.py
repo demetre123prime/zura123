@@ -1,131 +1,216 @@
 import hmac
 import os
+import secrets
+import sqlite3
+from datetime import datetime, timezone
+from functools import wraps
+from pathlib import Path
 
-from flask import Flask, redirect, render_template_string, request, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
+
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE = Path(os.environ.get("DATABASE_PATH", BASE_DIR / "dashboard.db"))
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "")
+
+if not DASHBOARD_PASSWORD:
+    raise RuntimeError("Set DASHBOARD_PASSWORD in your hosting environment.")
+if len(DASHBOARD_PASSWORD) < 12:
+    raise RuntimeError("DASHBOARD_PASSWORD must be at least 12 characters.")
+if not SECRET_KEY or len(SECRET_KEY) < 32:
+    raise RuntimeError("Set FLASK_SECRET_KEY to a random value of at least 32 characters.")
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY")
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD")
+app.config.update(
+    SECRET_KEY=SECRET_KEY,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "1") == "1",
+    PERMANENT_SESSION_LIFETIME=60 * 60 * 8,
+    MAX_CONTENT_LENGTH=16 * 1024,
+)
 
-if not app.secret_key or not DASHBOARD_PASSWORD:
-    raise RuntimeError(
-        "Set FLASK_SECRET_KEY and DASHBOARD_PASSWORD environment variables before starting."
-    )
+def get_db():
+    if "db" not in g:
+        DATABASE.parent.mkdir(parents=True, exist_ok=True)
+        g.db = sqlite3.connect(DATABASE)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
+    return g.db
 
-LOGIN_PAGE = """
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-      background: #0b1020; color: #edf2ff; font: 16px system-ui, sans-serif; }
-    main { width: min(92vw, 390px); padding: 32px; border: 1px solid #27324b;
-      border-radius: 18px; background: #121a2e; box-shadow: 0 20px 60px #0006; }
-    h1 { margin-top: 0; font-size: 1.6rem; }
-    p { color: #aab6d3; }
-    input, button { width: 100%; padding: 13px 14px; border-radius: 10px;
-      font: inherit; }
-    input { margin: 12px 0; border: 1px solid #394866; background: #0b1020; color: white; }
-    button { border: 0; background: #6d8cff; color: #081020; font-weight: 700; cursor: pointer; }
-    .error { color: #ff9caa; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Dashboard login</h1>
-    <p>Enter the dashboard password to continue.</p>
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <form method="post">
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-      <button type="submit">Enter dashboard</button>
-    </form>
-  </main>
-</body>
-</html>
-"""
+@app.teardown_appcontext
+def close_db(_error=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
-DASHBOARD_PAGE = """
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Main dashboard</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #0b1020; color: #edf2ff;
-      font: 16px system-ui, sans-serif; }
-    header { display: flex; justify-content: space-between; align-items: center;
-      gap: 16px; padding: 22px 5vw; border-bottom: 1px solid #27324b; }
-    h1 { margin: 0; font-size: 1.5rem; }
-    a { color: #a9bcff; }
-    main { padding: 5vw; }
-    .empty { padding: 28px; border: 1px solid #27324b; border-radius: 16px;
-      background: #121a2e; color: #aab6d3; }
-    button { border: 1px solid #53658c; border-radius: 9px; padding: 9px 14px;
-      background: #1b2945; color: white; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Main dashboard</h1>
-    <form method="post" action="{{ url_for('logout') }}">
-      <button type="submit">Log out</button>
-    </form>
-  </header>
-  <main>
-    <section class="empty">
-      <h2>Welcome</h2>
-      <p>Your dashboard is ready. You can add your own dashboard content here later.</p>
-    </section>
-  </main>
-</body>
-</html>
-"""
+def init_db():
+    db = get_db()
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS devices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'Computer',
+            description TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            last_seen TEXT
+        );
+        CREATE TABLE IF NOT EXISTS activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id INTEGER,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE SET NULL
+        );
+    """)
+    db.commit()
+
+@app.before_request
+def security_headers():
+    # Initialize the database lazily for each request.
+    if request.endpoint not in {"static"}:
+        init_db()
 
 @app.after_request
-def secure_headers(response):
+def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
     return response
 
+def csrf_token():
+    token = session.get("_csrf")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf"] = token
+    return token
 
-@app.route("/", methods=["GET", "POST"])
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+@app.before_request
+def verify_csrf():
+    if request.method == "POST":
+        expected = session.get("_csrf", "")
+        supplied = request.form.get("_csrf", "")
+        if not expected or not hmac.compare_digest(expected, supplied):
+            abort(400, "Invalid form token. Refresh the page and try again.")
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("authenticated"):
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+def now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+@app.get("/")
+def index():
+    return redirect(url_for("dashboard") if session.get("authenticated") else url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("authenticated"):
         return redirect(url_for("dashboard"))
-
-    error = None
     if request.method == "POST":
-        submitted = request.form.get("password", "")
-        if hmac.compare_digest(submitted, DASHBOARD_PASSWORD):
+        supplied = request.form.get("password", "")
+        if hmac.compare_digest(supplied, DASHBOARD_PASSWORD):
             session.clear()
             session["authenticated"] = True
+            session.permanent = True
+            flash("Welcome back.", "success")
             return redirect(url_for("dashboard"))
-        error = "Incorrect password. Please try again."
-
-    return render_template_string(LOGIN_PAGE, error=error)
-
-
-@app.get("/dashboard")
-def dashboard():
-    if not session.get("authenticated"):
-        return redirect(url_for("login"))
-    return render_template_string(DASHBOARD_PAGE)
-
+        flash("Incorrect password.", "error")
+    return render_template("login.html")
 
 @app.post("/logout")
+@login_required
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
+@app.get("/dashboard")
+@login_required
+def dashboard():
+    db = get_db()
+    devices = db.execute("SELECT * FROM devices ORDER BY id DESC").fetchall()
+    activity = db.execute("""
+        SELECT activity.*, devices.name AS device_name
+        FROM activity LEFT JOIN devices ON devices.id = activity.device_id
+        ORDER BY activity.id DESC LIMIT 12
+    """).fetchall()
+    total = db.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+    recent = db.execute("SELECT COUNT(*) FROM devices WHERE last_seen >= datetime('now', '-1 day')").fetchone()[0]
+    return render_template("dashboard.html", devices=devices, activity=activity, total=total, recent=recent)
+
+@app.post("/devices/add")
+@login_required
+def add_device():
+    name = request.form.get("name", "").strip()[:60]
+    kind = request.form.get("kind", "Computer").strip()[:30]
+    description = request.form.get("description", "").strip()[:120]
+    if not name:
+        flash("Enter a device name.", "error")
+        return redirect(url_for("dashboard"))
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO devices (name, kind, description, created_at) VALUES (?, ?, ?, ?)",
+        (name, kind or "Computer", description, now()),
+    )
+    db.execute("INSERT INTO activity (device_id, message, created_at) VALUES (?, ?, ?)",
+               (cur.lastrowid, "Device added manually", now()))
+    db.commit()
+    flash("Device added.", "success")
+    return redirect(url_for("dashboard"))
+
+@app.post("/devices/<int:device_id>/check-in")
+@login_required
+def check_in(device_id):
+    db = get_db()
+    device = db.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
+    if device is None:
+        abort(404)
+    timestamp = now()
+    db.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (timestamp, device_id))
+    db.execute("INSERT INTO activity (device_id, message, created_at) VALUES (?, ?, ?)",
+               (device_id, "Manual check-in recorded from dashboard", timestamp))
+    db.commit()
+    flash("Check-in recorded.", "success")
+    return redirect(url_for("dashboard"))
+
+@app.post("/devices/<int:device_id>/delete")
+@login_required
+def delete_device(device_id):
+    db = get_db()
+    db.execute("DELETE FROM devices WHERE id = ?", (device_id,))
+    db.commit()
+    flash("Device removed.", "success")
+    return redirect(url_for("dashboard"))
+
+@app.post("/activity/add")
+@login_required
+def add_activity():
+    message = request.form.get("message", "").strip()[:240]
+    if not message:
+        flash("Write a message first.", "error")
+        return redirect(url_for("dashboard"))
+    db = get_db()
+    db.execute("INSERT INTO activity (message, created_at) VALUES (?, ?)", (message, now()))
+    db.commit()
+    flash("Note added to activity.", "success")
+    return redirect(url_for("dashboard"))
+
+@app.errorhandler(400)
+def bad_request(error):
+    return render_template("error.html", code=400, message=getattr(error, "description", "Bad request")), 400
+
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template("error.html", code=404, message="That page or device could not be found."), 404
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    # Local development only. Use a production WSGI server when deployed.
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5000")), debug=False)
