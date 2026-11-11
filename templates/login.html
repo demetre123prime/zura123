@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Zura{% endblock %}
+{% block content %}
+<section class="login-wrap">
+  <div class="eyebrow"><span class="status-dot"></span> PRIVATE WORKSPACE</div>
+  <h1>Your space.<br><span class="gradient-text">Your overview.</span></h1>
+  <p class="subheading">Sign in to manage your device list and personal activity notes.</p>
+  <form class="panel login-panel" method="post" action="{{ url_for('login') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label for="password">Dashboard password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required autofocus>
+    <button class="button button-primary button-full" type="submit">Continue <span aria-hidden="true">→</span></button>
+    <p class="tiny-note">Access is restricted to people with the dashboard password.</p>
+  </form>
+  <div class="login-foot"><span class="lock-icon">◇</span> Protected session · Encrypted connection when deployed with HTTPS</div>
+</section>
+{% endblock %}
