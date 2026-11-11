@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Overview · Zura{% endblock %}
+{% block content %}
+<section class="welcome-row">
+  <div><div class="eyebrow"><span class="status-dot"></span> OVERVIEW</div><h1>Good to see you.</h1><p class="subheading">A simple place to organize your devices and notes.</p></div>
+  <div class="live-pill"><span class="pulse-dot"></span> SESSION ACTIVE</div>
+</section>
+<section class="stats-grid">
+  <article class="stat-card"><div class="stat-label">REGISTERED DEVICES</div><div class="stat-value">{{ total }}</div><div class="stat-foot">Added manually</div></article>
+  <article class="stat-card"><div class="stat-label">CHECK-INS · 24H</div><div class="stat-value">{{ recent }}</div><div class="stat-foot">Devices checked in recently</div></article>
+  <article class="stat-card"><div class="stat-label">ACTIVITY EVENTS</div><div class="stat-value">{{ activity|length }}</div><div class="stat-foot">Latest events shown below</div></article>
+</section>
+<div class="content-grid">
+  <section class="panel">
+    <div class="section-heading"><div><div class="eyebrow">YOUR INVENTORY</div><h2>Devices</h2></div><span class="count-chip">{{ total }} TOTAL</span></div>
+    <form class="device-form" action="{{ url_for('add_device') }}" method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="field-row"><div class="field"><label for="device-name">Device name</label><input id="device-name" name="name" maxlength="60" placeholder="e.g. My laptop" required></div>
+      <div class="field field-small"><label for="device-kind">Type</label><select id="device-kind" name="kind"><option>Computer</option><option>Phone</option><option>Tablet</option><option>Server</option><option>Other</option></select></div></div>
+      <div class="field"><label for="device-description">Description <span class="optional">OPTIONAL</span></label><input id="device-description" name="description" maxlength="120" placeholder="Short note about this device"></div>
+      <button class="button button-primary" type="submit">＋ Add device</button>
+    </form>
+    <div class="device-list">
+      {% for device in devices %}
+      <article class="device-item">
+        <div class="device-icon">{% if device.kind == 'Phone' %}▯{% elif device.kind == 'Server' %}▤{% elif device.kind == 'Tablet' %}▯{% else %}▣{% endif %}</div>
+        <div class="device-info"><strong>{{ device.name }}</strong><span>{{ device.kind }}{% if device.description %} · {{ device.description }}{% endif %}</span><small>{% if device.last_seen %}Last check-in: {{ device.last_seen }}{% else %}No check-in recorded{% endif %}</small></div>
+        <div class="device-actions">
+          <form method="post" action="{{ url_for('check_in', device_id=device.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="mini-button" type="submit">Check in</button></form>
+          <form method="post" action="{{ url_for('delete_device', device_id=device.id) }}" onsubmit="return confirm('Remove this device from your list?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="mini-button danger" type="submit" aria-label="Remove {{ device.name }}">×</button></form>
+        </div>
+      </article>
+      {% else %}
+      <div class="empty-state"><div class="empty-symbol">＋</div><strong>No devices yet</strong><span>Add your first device using the form above.</span></div>
+      {% endfor %}
+    </div>
+  </section>
+  <aside class="side-column">
+    <section class="panel note-panel">
+      <div class="eyebrow">QUICK NOTE</div><h2>Add to activity</h2><p class="muted">Write a short note for your own records.</p>
+      <form method="post" action="{{ url_for('add_activity') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <textarea name="message" maxlength="240" rows="3" placeholder="What would you like to remember?" required></textarea>
+        <button class="button button-secondary button-full" type="submit">Save note</button>
+      </form>
+    </section>
+    <section class="panel activity-panel">
+      <div class="section-heading"><div><div class="eyebrow">RECENT UPDATES</div><h2>Activity</h2></div></div>
+      <div class="timeline">
+        {% for item in activity %}
+        <div class="timeline-item"><span class="timeline-dot"></span><div><strong>{{ item.message }}</strong><span>{% if item.device_name %}{{ item.device_name }} · {% else %}Workspace · {% endif %}{{ item.created_at }}</span></div></div>
+        {% else %}
+        <p class="muted">Your updates will appear here.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </aside>
+</div>
+<p class="privacy-line"><span>◇</span> Manual records only. Nothing is installed on or collected from your devices automatically.</p>
+{% endblock %}
