@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>Zura Dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#131b30;--panel2:#18233c;--line:#263653;--muted:#93a4c3;--text:#eef3ff;--blue:#7c9cff;--green:#57d6a1;--red:#ff7f91}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#1b2b50 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1120px;margin:auto;padding:32px 22px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:32px}.brand{display:flex;align-items:center;gap:12px;font-weight:750;font-size:19px;letter-spacing:.2px}.logo{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#7c9cff,#8b6df6);color:#fff;font-weight:900}.tag{font-size:12px;color:#b6c6e4;border:1px solid var(--line);border-radius:99px;padding:7px 11px}
+h1{font-size:clamp(28px,4vw,40px);line-height:1.12;margin:0 0 8px}.sub{color:var(--muted);margin:0 0 28px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}.card{background:linear-gradient(160deg,#17223a,#111a2d);border:1px solid var(--line);border-radius:17px;padding:19px;box-shadow:0 12px 36px #0002}.stat-label{color:var(--muted);font-size:13px}.stat-value{font-size:29px;font-weight:750;margin-top:5px}.layout{display:grid;grid-template-columns:1.4fr .8fr;gap:18px}.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.card h2{font-size:17px;margin:0}.small{font-size:12px;color:var(--muted)}button{border:0;border-radius:10px;padding:10px 13px;background:var(--blue);color:#0b1020;font-weight:700;cursor:pointer}button:hover{filter:brightness(1.1)}button.secondary{background:#263653;color:#dce7ff}button.danger{background:#452635;color:#ffc5ce}.device{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.device:first-of-type{border-top:0}.device-name{font-weight:650}.device-meta{font-size:12px;color:var(--muted);margin-top:3px}.pill{font-size:11px;color:var(--green);background:#15382f;border:1px solid #285c4d;border-radius:99px;padding:4px 8px;white-space:nowrap}.actions{display:flex;gap:7px;flex-wrap:wrap}.actions button{padding:7px 9px;font-size:12px}.empty{color:var(--muted);padding:22px 0;text-align:center}.form{display:grid;gap:10px;margin-top:15px}input,select{width:100%;padding:11px 12px;background:#0d1527;border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit}label{font-size:12px;color:var(--muted)}.activity{border-left:2px solid #354b73;padding:1px 0 14px 14px;margin-left:5px}.activity:last-child{padding-bottom:0}.activity strong{font-size:13px}.activity time{display:block;color:var(--muted);font-size:11px;margin-top:3px}.notice{margin-top:20px;padding:13px 15px;border:1px solid #66532b;background:#302817;border-radius:12px;color:#f3dca6;font-size:12px}.footer{margin-top:25px;color:var(--muted);font-size:12px;text-align:center}.footer a{color:#aebfff}
+@media(max-width:760px){.stats{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.wrap{padding-top:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><div class="brand"><div class="logo">Z</div><span>Zura Dashboard</span></div><span class="tag">STATIC DEMO · GITHUB PAGES</span></header>
+<main>
+<h1>Device overview</h1><p class="sub">A simple place to keep a manual inventory and record check-ins.</p>
+<section class="stats" aria-label="Overview">
+<div class="card"><div class="stat-label">Registered devices</div><div class="stat-value" id="total">2</div></div>
+<div class="card"><div class="stat-label">Manual check-ins</div><div class="stat-value" id="checks">1</div></div>
+<div class="card"><div class="stat-label">Dashboard mode</div><div class="stat-value" style="font-size:20px;color:var(--green)">Local demo</div></div>
+</section>
+<section class="layout">
+<div class="card">
+<div class="card-head"><h2>Devices</h2><span class="small">Manual entries only</span></div>
+<div id="devices"></div>
+<form class="form" id="addForm">
+<label for="deviceName">Add a device</label><input id="deviceName" maxlength="60" placeholder="e.g. My laptop" required>
+<select id="deviceKind" aria-label="Device type"><option>Computer</option><option>Phone</option><option>Tablet</option><option>Other</option></select>
+<button type="submit">Add device</button>
+</form>
+</div>
+<aside class="card">
+<div class="card-head"><h2>Recent activity</h2><button class="secondary" id="clearActivity" type="button">Clear</button></div>
+<div id="activity"></div>
+</aside>
+</section>
+<div class="notice"><strong>Demo and privacy notice:</strong> This GitHub Pages version is static. Device entries and activity stay only in this browser using local storage; they are not sent to a server and are not shared across devices. There is no background monitoring or automatic data collection. Do not enter passwords or private information here.</div>
+</main>
+<footer class="footer">Zura Dashboard · <a href="https://github.com/demetre123prime/zura123">View source on GitHub</a></footer>
+</div>
+<script>
+(() => {
+const KEY='zura-dashboard-demo-v1';
+const initial={devices:[{id:1,name:'My computer',kind:'Computer',checks:1,last:'Example check-in'},{id:2,name:'My phone',kind:'Phone',checks:0,last:'Not checked in'}],activity:[{message:'Demo dashboard loaded',when:'Example activity'}],nextId:3};
+let state;
+try{state=JSON.parse(localStorage.getItem(KEY))||initial}catch{state=initial}
+const $=id=>document.getElementById(id);
+const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function log(message){state.activity.unshift({message,when:new Date().toLocaleString()});state.activity=state.activity.slice(0,12)}
+function render(){
+$('total').textContent=state.devices.length;
+$('checks').textContent=state.devices.reduce((n,d)=>n+d.checks,0);
+$('devices').innerHTML=state.devices.length?state.devices.map(d=>'<div class="device"><div><div class="device-name">'+escapeHtml(d.name)+'</div><div class="device-meta">'+escapeHtml(d.kind)+' · '+escapeHtml(d.last)+'</div></div><div class="actions"><button type="button" data-check="'+d.id+'">Check in</button><button class="danger" type="button" data-remove="'+d.id+'">Remove</button></div></div>').join(''):'<div class="empty">No devices yet. Add one below.</div>';
+$('activity').innerHTML=state.activity.length?state.activity.map(a=>'<div class="activity"><strong>'+escapeHtml(a.message)+'</strong><time>'+escapeHtml(a.when)+'</time></div>').join(''):'<div class="empty">No activity yet.</div>';
+}
+$('addForm').addEventListener('submit',e=>{e.preventDefault();const name=$('deviceName').value.trim();if(!name)return;const kind=$('deviceKind').value;state.devices.push({id:state.nextId++,name,kind,checks:0,last:'Not checked in'});log('Added '+name+' manually');$('deviceName').value='';save();render()});
+$('devices').addEventListener('click',e=>{const check=e.target.closest('[data-check]');const remove=e.target.closest('[data-remove]');if(check){const d=state.devices.find(x=>x.id===Number(check.dataset.check));if(d){d.checks++;d.last='Checked in '+new Date().toLocaleString();log('Manual check-in: '+d.name)}}else if(remove){const id=Number(remove.dataset.remove);const d=state.devices.find(x=>x.id===id);if(d){state.devices=state.devices.filter(x=>x.id!==id);log('Removed '+d.name)}}else{return}save();render()});
+$('clearActivity').addEventListener('click',()=>{state.activity=[];save();render()});
+render();
+})();
+</script>
+</body>
+</html>
