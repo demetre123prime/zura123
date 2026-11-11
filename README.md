@@ -17,7 +17,7 @@ py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 $env:DASHBOARD_PASSWORD = "sudo123"
-$env:FLASK_SECRET_KEY = py -c "import secrets; print(secrets.token_hex(32))"
+$env:FLASK_SECRET_KEY = (py -c "import secrets; print(secrets.token_hex(32))")
 py app.py
 ```
 
